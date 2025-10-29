@@ -1,10 +1,10 @@
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog, ttk
 import re
 import mysql.connector
 import meutemplate
 
-# Variável alunos estava sendo usada sem ser definida
+
 alunos = {}
 
 try:
@@ -17,28 +17,53 @@ try:
     cursor = conexao.cursor()
 except mysql.connector.Error as err:
     messagebox.showerror("Erro de Conexão", f"Não foi possível conectar ao banco de dados: {err}")
-    # Você pode querer sair do programa aqui se a conexão for vital
-    # exit()
+   
+estilo_label = {"bg": "#1e1e2f", "fg": "white", "font": ("Arial", 12, "bold")}
+estilo_botao = {"bg": "#4e4eb1", "fg": "white", "font": ("Arial", 11, "bold"), "width": 18}
+estilo_cabecalho = {"bg": "#4e4eb1", "fg": "white", "font": ("Arial", 12, "bold")}
+estilo_linha_par = {"bg": "#2c2c3e", "fg": "white", "font": ("Arial", 11)}
+estilo_linha_impar = {"bg": "#3c3c4e", "fg": "white", "font": ("Arial", 11)}
+estilo_media_par = {"bg": "#2c2c3e", "fg": "white", "font": ("Arial", 12, "bold")}
+estilo_media_impar = {"bg": "#3c3c4e", "fg": "white", "font": ("Arial", 12, "bold")}
 
 
 def carregar_alunos():
-    # Esta função não é estritamente necessária se atualizar_lista já busca os dados
-    # do banco, mas a mantive para mostrar a correção da variável 'alunos'.
-    cursor.execute("SELECT ra, nome FROM alunos")
+    
+    i = 0
+    
+    for widget in frame_dados_alunos.winfo_children():
+        widget.destroy()
+        
+        
+    cursor.execute("SELECT ra, nome, nota1, nota2, nota3, notaPIM FROM alunos")
     resultado = cursor.fetchall()
     alunos.clear()
-    for ra, nome in resultado:
-        alunos[ra] = {"nome": nome, "notas": []}
-        # Para evitar muitas consultas individuais, o ideal seria uma única
-        # consulta com JOIN e depois processar os dados em Python.
-        cursor.execute("""
-            SELECT nota FROM notas n 
-            JOIN alunos a ON n.aluno_id = a.id 
-            WHERE a.ra = %s
-        """, (ra,))
-        notas = [float(n[0]) for n in cursor.fetchall()]
-        alunos[ra]["notas"] = notas
+    
+    for ra, nome, nota1, nota2, nota3, notaPIM in resultado:
+        try:
+            n1 = float(nota1 if nota1 is not None else 0)
+            n2 = float(nota2 if nota2 is not None else 0)
+            n3 = float(nota3 if nota3 is not None else 0)
+            nPIM = float(notaPIM if notaPIM is not None else 0)
+            media = (n1 + n2 + n3 + nPIM) / 4
+            media_formatada = f"{media:.2f}"
+            
+            estilo_linha = estilo_linha_par if i % 2 == 0 else estilo_linha_impar
+            
 
+        
+            label_nome = tk.Label(frame_dados_alunos, text=nome, anchor="w", **estilo_linha)
+           
+            label_media = tk.Label(frame_dados_alunos, text=media_formatada, **estilo_linha)
+
+            
+            label_nome.grid(row=i, column=0, sticky="ew", padx=5, pady=2)
+            label_media.grid(row=i, column=1, sticky="ew", padx=5, pady=2)
+
+            i += 1
+        except (ValueError, TypeError):
+            media_formatada = "N/A"
+        
 def validar_ra(ra):
     # Padrão da UNIP: 6 a 8 caracteres alfanuméricos maiúsculos
     padrao = r"^[A-Z0-9]{6,8}$"
@@ -67,7 +92,6 @@ def cadastrar_aluno():
         messagebox.showinfo("Sucesso", f"Aluno {nome} cadastrado com sucesso!")
         entry_nome.delete(0, tk.END)
         entry_ra.delete(0, tk.END)
-        atualizar_lista()
     except mysql.connector.Error as err:
         messagebox.showerror("Erro SQL", f"Erro ao inserir aluno: {err}")
 
@@ -86,15 +110,14 @@ def atribuir_nota():
 
     try:
         nota_str = simpledialog.askstring("Nota", f"Digite a nota da prova (0-10) para {nome}:")
-        if nota_str is None: # Usuário cancelou
+        if nota_str is None: 
             return
 
-        nota = float(nota_str.replace(',', '.')) # Permite vírgula como separador
+        nota = float(nota_str.replace(',', '.'))
         if 0 <= nota <= 10:
             cursor.execute("INSERT INTO notas (aluno_id, nota) VALUES (%s, %s)", (aluno_id, nota))
             conexao.commit()
             messagebox.showinfo("Sucesso", f"Nota {nota} adicionada para {nome}.")
-            atualizar_lista()
         else:
             messagebox.showerror("Erro", "A nota deve estar entre 0 e 10.")
     except (TypeError, ValueError):
@@ -103,64 +126,52 @@ def atribuir_nota():
         messagebox.showerror("Erro SQL", f"Erro ao inserir nota: {err}")
 
 
-def calcular_media(ra):
-    """Retorna a média do aluno ou None se não houver notas."""
-    cursor.execute("""
-        SELECT AVG(nota)
-        FROM notas n
-        JOIN alunos a ON a.id = n.aluno_id
-        WHERE a.ra = %s
-    """, (ra,))
-    # fetchone() retorna uma tupla. O primeiro elemento [0] é a média ou None.
-    resultado = cursor.fetchone()[0]
-    return resultado
-
-# FUNÇÃO CORRIGIDA PARA O BOTÃO "Consultar Média"
 def consultar_media_aluno():
-    """Pede o RA e exibe a média do aluno em uma messagebox."""
-    ra = simpledialog.askstring("Consultar Média", "Digite o RA do aluno:").strip().upper()
-    if not ra: return
 
-    cursor.execute("SELECT nome FROM alunos WHERE ra = %s", (ra,))
-    aluno = cursor.fetchone()
+    
+    ra_temporario = simpledialog.askstring("Consultar Média", "Digite o RA do aluno:")
 
-    if not aluno:
-        messagebox.showerror("Erro", "RA não encontrado!")
+   
+    if ra_temporario is None:
+        return  
+
+    ra = ra_temporario.strip().upper()
+    if not ra:
+        messagebox.showwarning("Aviso", "Nenhum RA foi digitado.")
         return
-    
-    nome = aluno[0]
-    media = calcular_media(ra)
 
-    if media is not None:
-        messagebox.showinfo("Média do Aluno", f"Aluno: {nome}\nRA: {ra}\nMédia: {media:.2f}")
-    else:
-        messagebox.showinfo("Média do Aluno", f"Aluno: {nome}\nRA: {ra}\nNenhuma nota encontrada.")
-
-def atualizar_lista():
-    lista.delete(0, tk.END)
-    
     try:
-        cursor.execute("SELECT ra, nome FROM alunos ORDER BY nome")
-        alunos_db = cursor.fetchall() # Usando outro nome para evitar confusão com o global 'alunos'
+       
+        cursor.execute("SELECT nome, nota1, nota2, nota3, notaPIM FROM alunos WHERE ra = %s", (ra,))
+        
+        aluno_data = cursor.fetchone() 
 
-        for ra, nome in alunos_db:
-            media = calcular_media(ra)
-            if media is not None:
-                lista.insert(tk.END, f"{ra} - {nome} | Média: {media:.2f}")
-            else:
-                lista.insert(tk.END, f"{ra} - {nome} | Sem notas ainda")
+       
+        if aluno_data is None:
+            messagebox.showerror("Erro", f"O RA '{ra}' não foi encontrado!")
+            return
+
+        
+        nome, nota1, nota2, nota3, notaPIM = aluno_data
+
+        
+        n1 = float(nota1 if nota1 is not None else 0)
+        n2 = float(nota2 if nota2 is not None else 0)
+        n3 = float(nota3 if nota3 is not None else 0)
+        nPIM = float(notaPIM if notaPIM is not None else 0)
+        
+        media = (n1 + n2 + n3 + nPIM) / 4
+
+      
+        messagebox.showinfo("Média do Aluno", f"Aluno: {nome}\nRA: {ra}\nMédia: {media:.2f}")
+
     except mysql.connector.Error as err:
-        messagebox.showerror("Erro SQL", f"Erro ao carregar lista: {err}")
-
+        messagebox.showerror("Erro de Banco de Dados", f"Erro ao consultar o aluno: {err}")
 
 janela = tk.Tk()
 janela.title("Sistema de Notas - Luiz Otávio")
 janela.geometry("600x400")
 janela.config(bg="#1e1e2f")
-
-# --- Interface Gráfica (Sem mudanças) ---
-estilo_label = {"bg": "#1e1e2f", "fg": "white", "font": ("Arial", 12, "bold")}
-estilo_botao = {"bg": "#4e4eb1", "fg": "white", "font": ("Arial", 11, "bold"), "width": 18}
 
 tk.Label(janela, text="Nome do aluno:", **estilo_label).pack(pady=5)
 entry_nome = tk.Entry(janela, width=40)
@@ -175,21 +186,30 @@ frame_botoes.pack(pady=15)
 
 tk.Button(frame_botoes, text="Cadastrar Aluno", command=cadastrar_aluno, **estilo_botao).grid(row=0, column=0, padx=5, pady=5)
 tk.Button(frame_botoes, text="Atribuir Nota", command=atribuir_nota, **estilo_botao).grid(row=0, column=1, padx=5, pady=5)
+tk.Button(frame_botoes, text="Atualizar ", command=carregar_alunos, **estilo_botao).grid(row=1, column=0, padx=5, pady=5)
+tk.Button(frame_botoes, text="Consultar Média", command=consultar_media_aluno, **estilo_botao).grid(row=1, column=1, padx=5, pady=5)
 
-# CORREÇÃO: Usando a nova função que trata a consulta
-tk.Button(frame_botoes, text="Consultar Média", command=consultar_media_aluno, **estilo_botao).grid(row=1, column=0, padx=5, pady=5)
-tk.Button(frame_botoes, text="Atualizar Lista", command=atualizar_lista, **estilo_botao).grid(row=1, column=1, padx=5, pady=5)
+frame_tabela = tk.Frame(janela, bg="#0000ff")
+frame_tabela.pack(pady=10, padx=10, fill="both", expand=True)
+frame_cabecalho = tk.Frame(frame_tabela)
+frame_cabecalho.pack(fill="x")
 
-tk.Label(janela, text="Alunos cadastrados:", **estilo_label).pack(pady=5)
-lista = tk.Listbox(janela, width=70, height=10, bg="#2b2b40", fg="white", font=("Consolas", 10))
-lista.pack()
+label_cabecalho_nome = tk.Label(frame_cabecalho, text="Alunos Cadastrados:", anchor="w", **estilo_cabecalho)
+label_cabecalho_nome.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-# CHAMADA INICIAL: Carregar a lista na inicialização
-atualizar_lista()
+
+
+frame_dados_alunos = tk.Frame(frame_tabela, bg="#1e1e2f")
+frame_dados_alunos.pack(fill="both", expand=True)
+
+frame_dados_alunos.grid_columnconfigure(0, weight=3) 
+frame_dados_alunos.grid_columnconfigure(1, weight=1) 
+
+carregar_alunos()
 
 janela.mainloop()
 
-# Fechar conexão ao sair
+
 if 'conexao' in locals() and conexao.is_connected():
     cursor.close()
     conexao.close()
