@@ -1,6 +1,17 @@
-# Ignora arquivos de template específicos
+# arquivos temporários e build
+__pycache__/
+build/
+dist/
+*.spec
+
+# arquivos de ambiente
+*.pyc
+*.pyo
+*.pyd
+
+# dados sensíveis
 meutemplate.py
 
-
-# Ignora o cache do Python
-__pycache__/
+# configs locais
+.vscode/
+*.log
